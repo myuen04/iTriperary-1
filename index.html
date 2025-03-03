@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iTriperary - Trip Planning Made Simple</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>iTriperary</h1>
+            <p>Plan your trips together, effortlessly</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <h2>Trip Management</h2>
+                <div class="trip-form">
+                    <input type="text" id="tripName" placeholder="Trip Name">
+                    <input type="date" id="tripDate">
+                    <button onclick="createTrip()">Create Trip</button>
+                </div>
+                <div class="trip-list" id="tripList"></div>
+            </div>
+
+            <div class="feature-card">
+                <h2>Expense Tracker</h2>
+                <div class="trip-form">
+                    <input type="number" id="expenseAmount" placeholder="Amount">
+                    <input type="text" id="expenseDescription" placeholder="Description">
+                    <button onclick="addExpense()">Add Expense</button>
+                </div>
+                <div class="expense-list" id="expenseList"></div>
+            </div>
+
+            <div class="feature-card">
+                <h2>Exchange Rate Tracker</h2>
+                <div class="trip-form">
+                    <input type="number" id="amount" placeholder="Amount">
+                    <select id="fromCurrency">
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                    </select>
+                    <select id="toCurrency">
+                        <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
+                        <option value="GBP">GBP</option>
+                    </select>
+                    <button onclick="convertCurrency()">Convert</button>
+                    <div id="conversionResult"></div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h2>Weather Tracker</h2>
+                <div class="trip-form">
+                    <input type="text" id="location" placeholder="Enter Location">
+                    <button onclick="checkWeather()">Check Weather</button>
+                    <div id="weatherResult"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
