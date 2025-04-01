@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iTriperary - Trip Planning Made Simple</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
+
+    <div class="features-page" id="features-page">
         <div class="header">
             <h1>iTriperary</h1>
             <p>Plan your trips together, effortlessly</p>
@@ -18,10 +20,64 @@
                 <h2>Trip Management</h2>
                 <div class="trip-form">
                     <input type="text" id="tripName" placeholder="Trip Name">
-                    <input type="date" id="tripDate">
+
+                    <input type="text" id="tripDestination" placeholder="Enter Destination">
+
+                    <div class="date-inputs">
+                        <div class="date-input">
+                            <label for="startDate">Start Date</label>
+                            <input type="date" id="startDate">
+                        </div>
+                        <div class="date-input">
+                            <label for="endDate">End Date</label>
+                            <input type="date" id="endDate">
+                        </div>
+                    </div>
                     <button onclick="createTrip()">Create Trip</button>
                 </div>
                 <div class="trip-list" id="tripList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="trip-details-page" id="trip-details-page" style="display: none;">
+        <div class="header">
+            <h1 id="tripDetailsTitle"></h1>
+            <p id="tripDetailsDestination"></p>
+            <p id="tripDetailsDate"></p>
+            <button class="back-button" onclick="goBack()">Back to Trips</button>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <h2>Exchange Rate Tracker</h2>
+                <div class="trip-form">
+                    <input type="number" id="amount" placeholder="Amount">
+                    <div class="currency-inputs">
+                        <div class="currency-input">
+                            <label for="fromCurrency">From</label>
+                            <select id="fromCurrency">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="GBP">GBP</option>
+                                <option value="JPY">JPY</option>
+                                <option value="KRW">KRW</option>
+                            </select>
+                        </div>
+                        <div class="currency-input">
+                            <label for="toCurrency">To</label>
+                            <select id="toCurrency">
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="GBP">GBP</option>
+                                <option value="JPY">JPY</option>
+                                <option value="KRW">KRW</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button onclick="convertCurrency()">Convert</button>
+                    <div id="conversionResult"></div>
+                </div>
             </div>
 
             <div class="feature-card">
@@ -29,41 +85,41 @@
                 <div class="trip-form">
                     <input type="number" id="expenseAmount" placeholder="Amount">
                     <input type="text" id="expenseDescription" placeholder="Description">
+                    <select id="expenseCategory">
+                        <option value="food">Food & Dining</option>
+                        <option value="activities">Activities & Entertainment</option>
+                        <option value="accommodation">Accommodation</option>
+                        <option value="transportation">Transportation</option>
+                        <option value="shopping">Shopping</option>
+                        <option value="miscellaneous">Miscellaneous</option>
+                    </select>
                     <button onclick="addExpense()">Add Expense</button>
+                </div>
+                <div class="expense-summary">
+                    <div class="total-expenses">
+                        <h3>Total Expenses: $<span id="totalExpenses">0.00</span></h3>
+                    </div>
+                    <div class="expense-chart-container">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
                 </div>
                 <div class="expense-list" id="expenseList"></div>
             </div>
 
             <div class="feature-card">
-                <h2>Exchange Rate Tracker</h2>
-                <div class="trip-form">
-                    <input type="number" id="amount" placeholder="Amount">
-                    <select id="fromCurrency">
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                    </select>
-                    <select id="toCurrency">
-                        <option value="EUR">EUR</option>
-                        <option value="USD">USD</option>
-                        <option value="GBP">GBP</option>
-                    </select>
-                    <button onclick="convertCurrency()">Convert</button>
-                    <div id="conversionResult"></div>
-                </div>
-            </div>
-
-            <div class="feature-card">
                 <h2>Weather Tracker</h2>
                 <div class="trip-form">
-                    <input type="text" id="location" placeholder="Enter Location">
-                    <button onclick="checkWeather()">Check Weather</button>
+                    <div class="weather-input-container">
+                        <input type="text" id="location" placeholder="Enter location" oninput="handleLocationInput()">
+                        <div id="locationDropdown"></div>
+                    </div>
                     <div id="weatherResult"></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
