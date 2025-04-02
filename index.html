@@ -5,12 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iTriperary - Trip Planning Made Simple</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="features-page" id="features-page">
+    <div class="home-page" id="home-page">
+        <div class="header">
+            <h1>iTriperary</h1>
+            <p class="tagline">Plan your trips together, effortlessly</p>
+        </div>
+        
+        <div class="hero-section">
+            <div class="hero-content">
+                <h2>Your Ultimate Trip Planning Companion</h2>
+                <p>Create, manage, and share your travel plans with ease. Track expenses, check weather, and convert currencies - all in one place.</p>
+                <button class="cta-button" onclick="showFeatures()">Start Planning</button>
+            </div>
+        </div>
+
+        <div class="features-preview">
+            <div class="preview-card">
+                <h3>✈️ Trip Management</h3>
+                <p>Create and organize your trips with detailed itineraries and dates.</p>
+            </div>
+            <div class="preview-card">
+                <h3>💰 Expense Tracking</h3>
+                <p>Track your spending with categories and visual expense breakdowns.</p>
+            </div>
+            <div class="preview-card">
+                <h3>🌤️ Weather Updates</h3>
+                <p>Check weather forecasts for your destinations in real-time.</p>
+            </div>
+            <div class="preview-card">
+                <h3>💱 Currency Converter</h3>
+                <p>Convert between different currencies for accurate budgeting.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="features-page" id="features-page" style="display: none;">
         <div class="header">
             <h1>iTriperary</h1>
             <p>Plan your trips together, effortlessly</p>
+            <button class="home-button" onclick="showHome()">Home</button>
         </div>
 
         <div class="features-grid">
@@ -18,9 +54,7 @@
                 <h2>Trip Management</h2>
                 <div class="trip-form">
                     <input type="text" id="tripName" placeholder="Trip Name">
-
                     <input type="text" id="tripDestination" placeholder="Enter Destination">
-
                     <div class="date-inputs">
                         <div class="date-input">
                             <label for="startDate">Start Date</label>
@@ -31,7 +65,12 @@
                             <input type="date" id="endDate">
                         </div>
                     </div>
-                    <button onclick="createTrip()">Create Trip</button>
+                    <div class="form-group">
+                        <label for="shareCode">Share Code (6 characters):</label>
+                        <input type="text" id="shareCode" maxlength="6" pattern="[A-Za-z0-9]{6}" title="Please enter exactly 6 characters (letters or numbers)" required>
+                        <small class="form-text">This code will be used to share your trip with others</small>
+                    </div>
+                    <button type="button" onclick="createTrip()" class="create-button">Create Trip</button>
                 </div>
                 <div class="trip-list" id="tripList"></div>
             </div>
@@ -43,22 +82,9 @@
             <h1 id="tripDetailsTitle"></h1>
             <p id="tripDetailsDestination"></p>
             <p id="tripDetailsDate"></p>
-            <div class="header-actions">
+            <div class="header-buttons">
                 <button class="back-button" onclick="goBack()">Back to Trips</button>
-                <button class="share-button" onclick="showShareDialog()">Share Trip</button>
-            </div>
-        </div>
-
-        <!-- Share Dialog -->
-        <div id="shareDialog" class="share-dialog" style="display: none;">
-            <div class="share-dialog-content">
-                <h3>Share Trip</h3>
-                <p>Anyone with this link can view and edit this trip:</p>
-                <div class="share-link-container">
-                    <input type="text" id="shareLink" readonly>
-                    <button onclick="copyShareLink()" class="copy-button">Copy Link</button>
-                </div>
-                <button onclick="closeShareDialog()" class="close-button">Close</button>
+                <button class="home-button" onclick="showHome()">Home</button>
             </div>
         </div>
 
@@ -130,20 +156,14 @@
                     <div id="weatherResult"></div>
                 </div>
             </div>
+
+            <div class="share-section">
+                <button onclick="shareTrip(currentTripId)" class="share-button">Generate Share Code</button>
+            </div>
         </div>
     </div>
 
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    
-    <!-- Firebase Config -->
-    <script src="firebase-config.js"></script>
-    
-    <!-- Main Script -->
     <script src="script.js"></script>
 </body>
 </html>
