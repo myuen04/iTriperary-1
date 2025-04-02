@@ -1,5 +1,12 @@
 // Initialize Firebase
-import firebaseConfig from './config.js';
+const firebaseConfig = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+};
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
@@ -11,6 +18,7 @@ let trips = []; // Store all trips
 let currentTripId = null;
 let expenseChart = null;
 let tripListener = null; // For real-time trip updates
+let tripListListener = null; // Separate listener for trip list
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -169,7 +177,17 @@ async function joinTrip() {
 
             console.log('Successfully joined trip:', trip.id);
             alert('Successfully joined the trip!');
-            window.location.href = `trip-details.html?id=${trip.id}`;
+            
+            // Update the join trip section to show the user's name
+            const joinTripSection = document.querySelector('.join-trip-section');
+            joinTripSection.innerHTML = `
+                <input type="text" id="joinCode" placeholder="Enter share code" maxlength="6" pattern="[A-Za-z0-9]{6}">
+                <button onclick="joinTrip()" class="join-button">Join Trip</button>
+                <p class="joined-user">Joined as: ${userName}</p>
+            `;
+            
+            // Open the trip instead of redirecting
+            openTrip(trip.id);
         } else {
             alert('You are already a collaborator on this trip.');
         }
@@ -217,13 +235,14 @@ function setupTripListener(tripId) {
 // Update openTrip function to use real-time listener
 async function openTrip(tripId) {
     try {
+        cleanupListeners();
+        
         const tripDoc = await db.collection('trips').doc(tripId).get();
         if (!tripDoc.exists) {
             alert('Trip not found');
             return;
         }
 
-        // Set current trip data immediately
         currentTrip = tripDoc.data();
         currentTripId = tripId;
 
@@ -238,37 +257,47 @@ async function openTrip(tripId) {
             `Trip Date: ${new Date(currentTrip.startDate).toLocaleDateString()} - ${new Date(currentTrip.endDate).toLocaleDateString()}`;
 
         // Setup real-time listener for this trip
-        setupTripListener(tripId);
-        
-        // Only fetch new weather if we don't have any weather data displayed
-        const weatherResult = document.getElementById('weatherResult');
-        if (!weatherResult.innerHTML) {
-            const locationData = await getCoordinatesForLocation(currentTrip.destination);
-            if (locationData) {
-                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
+        tripListener = db.collection('trips').doc(tripId).onSnapshot((doc) => {
+            if (doc.exists) {
+                currentTrip = doc.data();
+                updateTripUI();
             } else {
-                weatherResult.innerHTML = `
-                    <div class="weather-result">
-                        <h3>Weather for ${currentTrip.destination}</h3>
-                        <div class="weather-details">
-                            <p class="error">Unable to find weather data for this destination. Please try searching for a specific city.</p>
-                        </div>
-                    </div>
-                `;
+                console.error('Trip not found');
+                showFeatures();
             }
-        }
+        });
+        
+        // Initial UI update
+        updateTripUI();
     } catch (error) {
         console.error('Error opening trip:', error);
         alert('There was an error opening the trip. Please try again.');
     }
 }
 
+// Helper function to update trip UI
+function updateTripUI() {
+    if (!currentTrip) return;
+    
+    // Update expenses
+    updateExpenseList();
+    updateExpenseChart();
+    updateTotalExpenses();
+    
+    // Update weather if needed
+    const weatherResult = document.getElementById('weatherResult');
+    if (!weatherResult.innerHTML) {
+        getCoordinatesForLocation(currentTrip.destination).then(locationData => {
+            if (locationData) {
+                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
+            }
+        });
+    }
+}
+
 // Update goBack function to clean up listener
 function goBack() {
-    if (tripListener) {
-        tripListener();
-        tripListener = null;
-    }
+    cleanupListeners();
     document.getElementById('trip-details-page').style.display = 'none';
     document.getElementById('features-page').style.display = 'block';
     document.getElementById('home-page').style.display = 'none';
@@ -292,11 +321,20 @@ function setupTripListListener() {
             const trip = doc.data();
             const tripElement = document.createElement('div');
             tripElement.className = 'trip-item';
+            
+            // Create collaborators list HTML
+            const collaboratorsList = trip.collaborators.map(collaborator => 
+                `<span class="collaborator">${collaborator.name}${collaborator.role === 'owner' ? ' (Owner)' : ''}</span>`
+            ).join(', ');
+            
             tripElement.innerHTML = `
                 <h3>${trip.name}</h3>
                 <p>Destination: ${trip.destination}</p>
                 <p>Date: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}</p>
                 <p class="share-code">Share Code: ${trip.shareCode}</p>
+                <div class="collaborators-list">
+                    <p>Collaborators: ${collaboratorsList}</p>
+                </div>
                 <div class="trip-actions">
                     <button onclick="openTrip('${trip.id}')" class="action-button">Open</button>
                     <button onclick="deleteTrip('${trip.id}')" class="action-button delete">Delete</button>
@@ -313,6 +351,7 @@ function setupTripListListener() {
 
 // Update showFeatures to use real-time listener
 function showFeatures() {
+    cleanupListeners();
     document.getElementById('home-page').style.display = 'none';
     document.getElementById('features-page').style.display = 'block';
     document.getElementById('trip-details-page').style.display = 'none';
@@ -320,12 +359,10 @@ function showFeatures() {
     currentTripId = null;
     updateWeatherInput();
     
-    // Setup real-time listener for trip list
-    if (tripListener) {
-        tripListener();
-        tripListener = null;
+    // Setup trip list listener
+    if (!tripListListener) {
+        tripListListener = setupTripListListener();
     }
-    tripListener = setupTripListListener();
 }
 
 // Update deleteTrip to handle real-time updates
@@ -936,13 +973,54 @@ function displayWeather(weatherData, locationString, lat, lon) {
     `;
 }
 
-// Navigation Functions
-function showHome() {
+// Make navigation functions globally available
+window.showHome = function() {
+    cleanupListeners();
     document.getElementById('home-page').style.display = 'block';
     document.getElementById('features-page').style.display = 'none';
     document.getElementById('trip-details-page').style.display = 'none';
     currentTrip = null;
-    updateWeatherInput();
+    currentTripId = null;
+};
+
+window.showFeatures = function() {
+    cleanupListeners();
+    document.getElementById('home-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'block';
+    document.getElementById('trip-details-page').style.display = 'none';
+    currentTrip = null;
+    currentTripId = null;
+    
+    // Setup trip list listener
+    if (!tripListListener) {
+        tripListListener = setupTripListListener();
+    }
+};
+
+window.goBack = function() {
+    cleanupListeners();
+    document.getElementById('trip-details-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'block';
+    document.getElementById('home-page').style.display = 'none';
+    currentTrip = null;
+    currentTripId = null;
+    
+    // Setup trip list listener
+    if (!tripListListener) {
+        tripListListener = setupTripListListener();
+    }
+};
+
+// Helper function to cleanup listeners
+function cleanupListeners() {
+    if (tripListener) {
+        tripListener();
+        tripListener = null;
+    }
+    if (tripListListener) {
+        tripListListener();
+        tripListListener = null;
+    }
 }
 
 // Collaboration feature
