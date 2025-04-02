@@ -16,9 +16,15 @@
         
         <div class="hero-section">
             <div class="hero-content">
-                <h2>Your Ultimate Trip Planning Companion</h2>
-                <p>Create, manage, and share your travel plans with ease. Track expenses, check weather, and convert currencies - all in one place.</p>
-                <button class="cta-button" onclick="showFeatures()">Start Planning</button>
+                <h2>Plan Your Perfect Trip</h2>
+                <p>Create, manage, and share your travel plans with ease</p>
+                <div class="hero-actions">
+                    <button onclick="showFeatures()" class="cta-button">Start Planning</button>
+                    <div class="join-trip-section">
+                        <input type="text" id="joinCode" placeholder="Enter share code" maxlength="6" pattern="[A-Za-z0-9]{6}">
+                        <button onclick="joinTrip()" class="join-button">Join Trip</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -66,9 +72,12 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="shareCode">Share Code (6 characters):</label>
-                        <input type="text" id="shareCode" maxlength="6" pattern="[A-Za-z0-9]{6}" title="Please enter exactly 6 characters (letters or numbers)" required>
-                        <small class="form-text">This code will be used to share your trip with others</small>
+                        <label for="shareCode">Share Code (Optional):</label>
+                        <div class="share-code-input">
+                            <input type="text" id="shareCode" maxlength="6" pattern="[A-Za-z0-9]{6}" title="Please enter exactly 6 characters (letters or numbers)">
+                            <button type="button" onclick="generateRandomShareCode()" class="generate-code-button">Generate Code</button>
+                        </div>
+                        <small class="form-text">Enter a 6-character code or generate one to share your trip with others</small>
                     </div>
                     <button type="button" onclick="createTrip()" class="create-button">Create Trip</button>
                 </div>
@@ -156,14 +165,13 @@
                     <div id="weatherResult"></div>
                 </div>
             </div>
-
-            <div class="share-section">
-                <button onclick="shareTrip(currentTripId)" class="share-button">Generate Share Code</button>
-            </div>
         </div>
     </div>
 
+    <!-- Load scripts in correct order -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="script.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>

@@ -1,10 +1,24 @@
+// Initialize Firebase
+import firebaseConfig from './config.js';
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Global variables
 let currentTrip = null;
 let trips = []; // Store all trips
 let currentTripId = null;
+let expenseChart = null;
+let tripListener = null; // For real-time trip updates
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    updateTripList();
+    // Show home page by default
+    showHome();
+    
+    // Initialize any other necessary components
+    initializeCharts();
     
     // Setup location input
     const locationInput = document.getElementById('location');
@@ -27,114 +41,309 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-function createTrip() {
-    const tripName = document.getElementById('tripName').value;
-    const tripDestination = document.getElementById('tripDestination').value;
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    const shareCode = document.getElementById('shareCode').value.toUpperCase();
-
-    console.log('Creating trip with share code:', shareCode);
-
-    if (!tripName || !tripDestination || !startDate || !endDate || !shareCode) {
-        alert('Please fill in all fields');
-        return;
-    }
-
-    if (new Date(startDate) > new Date(endDate)) {
-        alert('Start date must be before end date');
-        return;
-    }
-
-    if (!/^[A-Z0-9]{6}$/.test(shareCode)) {
-        alert('Share code must be exactly 6 characters (letters or numbers)');
-        return;
-    }
-
-    // Check if share code is already in use
-    const existingTrips = JSON.parse(localStorage.getItem('trips')) || [];
-    if (existingTrips.some(trip => trip.shareCode === shareCode)) {
-        alert('This share code is already in use. Please choose a different one.');
-        return;
-    }
-
-    const apiKey = 'cac3923cef164a92bec0a99632bafc53';
-    const geoApiUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(tripDestination)}&apiKey=${apiKey}`;
-
-    fetch(geoApiUrl)
-        .then(response => response.json())
-        .then(result => {
-            if (result.features && result.features.length > 0) {
-                const validatedDestination = result.features[0].properties.formatted;
-
-                currentTrip = {
-                    id: Date.now(),
-                    name: tripName,
-                    destination: tripDestination,
-                    startDate: startDate,
-                    endDate: endDate,
-                    shareCode: shareCode,
-                    collaborators: [{ name: 'You (Owner)', role: 'owner' }],
-                    expenses: []
-                };
-
-                // Add trip to the trips array
-                trips.push(currentTrip);
-
-                // Update trip details page
-                document.getElementById('tripDetailsTitle').textContent = tripName;
-                document.getElementById('tripDetailsDestination').textContent = `Destination: ${tripDestination}`;
-                document.getElementById('tripDetailsDate').textContent = 
-                    `Trip Date: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
-
-                // Show trip details page
-                document.getElementById('features-page').style.display = 'none';
-                document.getElementById('trip-details-page').style.display = 'block';
-
-                // Clear form
-                document.getElementById('tripName').value = '';
-                document.getElementById('tripDestination').value = '';
-                document.getElementById('startDate').value = '';
-                document.getElementById('endDate').value = '';
-                document.getElementById('shareCode').value = '';
-
-                // Update the trip list
-                updateTripList();
-            } else {
-                alert("Could not validate destination. Please enter a more specific location.");
-            }
-        })
-        .catch(error => {
-            console.error('API error:', error);
-            alert("There was an error validating the destination.");
-        });
+// Add this function to generate random share codes
+function generateRandomShareCode() {
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    document.getElementById('shareCode').value = code;
 }
 
-function updateTripList() {
-    const tripList = document.getElementById('tripList');
-    tripList.innerHTML = '';
+// Update createTrip function to handle optional share codes
+async function createTrip() {
+    try {
+        const tripName = document.getElementById('tripName').value;
+        const tripDestination = document.getElementById('tripDestination').value;
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        let shareCode = document.getElementById('shareCode').value.toUpperCase();
 
-    if (trips.length === 0) {
-        tripList.innerHTML = '<p>No trips created yet</p>';
-        return;
+        if (!tripName || !tripDestination || !startDate || !endDate) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        if (new Date(startDate) > new Date(endDate)) {
+            alert('Start date must be before end date');
+            return;
+        }
+
+        // Generate a random share code if none provided
+        if (!shareCode) {
+            shareCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        } else if (!/^[A-Z0-9]{6}$/.test(shareCode)) {
+            alert('Share code must be exactly 6 characters (letters or numbers)');
+            return;
+        }
+
+        // Check if share code is already in use
+        const existingTrip = await db.collection('trips').where('shareCode', '==', shareCode).get();
+        if (!existingTrip.empty) {
+            alert('This share code is already in use. Please choose a different one or generate a new one.');
+            return;
+        }
+
+        const apiKey = 'cac3923cef164a92bec0a99632bafc53';
+        const geoApiUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(tripDestination)}&apiKey=${apiKey}`;
+
+        const response = await fetch(geoApiUrl);
+        const result = await response.json();
+        
+        if (result.features && result.features.length > 0) {
+            const validatedDestination = result.features[0].properties.formatted;
+
+            const tripData = {
+                id: Date.now().toString(),
+                name: tripName,
+                destination: tripDestination,
+                startDate: startDate,
+                endDate: endDate,
+                shareCode: shareCode,
+                collaborators: [{ name: 'You (Owner)', role: 'owner' }],
+                expenses: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Save to Firebase
+            await db.collection('trips').doc(tripData.id).set(tripData);
+            console.log('Trip created successfully:', tripData.id);
+
+            // Update UI
+            currentTrip = tripData;
+            currentTripId = tripData.id;
+
+            // Show trip details page
+            document.getElementById('home-page').style.display = 'none';
+            document.getElementById('features-page').style.display = 'none';
+            document.getElementById('trip-details-page').style.display = 'block';
+
+            // Update trip details
+            document.getElementById('tripDetailsTitle').textContent = tripName;
+            document.getElementById('tripDetailsDestination').textContent = `Destination: ${tripDestination}`;
+            document.getElementById('tripDetailsDate').textContent = 
+                `Trip Date: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
+
+            // Clear form
+            document.getElementById('tripName').value = '';
+            document.getElementById('tripDestination').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('shareCode').value = '';
+
+            // Update the trip list
+            updateTripList();
+        } else {
+            alert("Could not validate destination. Please enter a more specific location.");
+        }
+    } catch (error) {
+        console.error('Error creating trip:', error);
+        alert("There was an error creating the trip. Please try again.");
+    }
+}
+
+// Update joinTrip function to use Firebase
+async function joinTrip() {
+    try {
+        const shareCode = document.getElementById('joinCode').value.toUpperCase();
+        console.log('Attempting to join trip with code:', shareCode);
+        
+        const tripQuery = await db.collection('trips').where('shareCode', '==', shareCode).get();
+        
+        if (tripQuery.empty) {
+            alert('Invalid share code. Please try again.');
+            return;
+        }
+
+        const trip = tripQuery.docs[0].data();
+        const userName = prompt('Enter your name:');
+        
+        if (!userName) return;
+
+        // Check if user is already a collaborator
+        if (!trip.collaborators.some(c => c.name === userName)) {
+            // Update collaborators array
+            await db.collection('trips').doc(trip.id).update({
+                collaborators: firebase.firestore.FieldValue.arrayUnion({
+                    name: userName,
+                    role: 'collaborator'
+                })
+            });
+
+            console.log('Successfully joined trip:', trip.id);
+            alert('Successfully joined the trip!');
+            window.location.href = `trip-details.html?id=${trip.id}`;
+        } else {
+            alert('You are already a collaborator on this trip.');
+        }
+    } catch (error) {
+        console.error('Error joining trip:', error);
+        alert('There was an error joining the trip. Please try again.');
+    }
+}
+
+// Function to setup real-time listener for current trip
+function setupTripListener(tripId) {
+    // Remove existing listener if any
+    if (tripListener) {
+        tripListener();
     }
 
-    trips.forEach(trip => {
-        const tripItem = document.createElement('div');
-        tripItem.className = 'trip-item';
-        tripItem.innerHTML = `
-            <div class="trip-info">
+    // Setup new listener
+    tripListener = db.collection('trips').doc(tripId).onSnapshot((doc) => {
+        if (doc.exists) {
+            currentTrip = doc.data();
+            currentTripId = tripId;
+            
+            // Update UI with new data
+            document.getElementById('tripDetailsTitle').textContent = currentTrip.name;
+            document.getElementById('tripDetailsDestination').textContent = `Destination: ${currentTrip.destination}`;
+            document.getElementById('tripDetailsDate').textContent = 
+                `Trip Date: ${new Date(currentTrip.startDate).toLocaleDateString()} - ${new Date(currentTrip.endDate).toLocaleDateString()}`;
+            
+            // Update expenses
+            updateExpenseList();
+            updateExpenseChart();
+            updateTotalExpenses();
+            
+            // Update weather input
+            updateWeatherInput();
+        } else {
+            console.error('Trip not found');
+            showFeatures(); // Return to features page if trip was deleted
+        }
+    }, (error) => {
+        console.error('Error listening to trip updates:', error);
+    });
+}
+
+// Update openTrip function to use real-time listener
+async function openTrip(tripId) {
+    try {
+        const tripDoc = await db.collection('trips').doc(tripId).get();
+        if (!tripDoc.exists) {
+            alert('Trip not found');
+            return;
+        }
+
+        // Set current trip data immediately
+        currentTrip = tripDoc.data();
+        currentTripId = tripId;
+
+        // Show trip details page
+        document.getElementById('features-page').style.display = 'none';
+        document.getElementById('trip-details-page').style.display = 'block';
+
+        // Update trip details
+        document.getElementById('tripDetailsTitle').textContent = currentTrip.name;
+        document.getElementById('tripDetailsDestination').textContent = `Destination: ${currentTrip.destination}`;
+        document.getElementById('tripDetailsDate').textContent = 
+            `Trip Date: ${new Date(currentTrip.startDate).toLocaleDateString()} - ${new Date(currentTrip.endDate).toLocaleDateString()}`;
+
+        // Setup real-time listener for this trip
+        setupTripListener(tripId);
+        
+        // Only fetch new weather if we don't have any weather data displayed
+        const weatherResult = document.getElementById('weatherResult');
+        if (!weatherResult.innerHTML) {
+            const locationData = await getCoordinatesForLocation(currentTrip.destination);
+            if (locationData) {
+                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
+            } else {
+                weatherResult.innerHTML = `
+                    <div class="weather-result">
+                        <h3>Weather for ${currentTrip.destination}</h3>
+                        <div class="weather-details">
+                            <p class="error">Unable to find weather data for this destination. Please try searching for a specific city.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error opening trip:', error);
+        alert('There was an error opening the trip. Please try again.');
+    }
+}
+
+// Update goBack function to clean up listener
+function goBack() {
+    if (tripListener) {
+        tripListener();
+        tripListener = null;
+    }
+    document.getElementById('trip-details-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'block';
+    document.getElementById('home-page').style.display = 'none';
+    currentTrip = null;
+    currentTripId = null;
+    updateWeatherInput();
+}
+
+// Update updateTripList to use real-time listener
+function setupTripListListener() {
+    return db.collection('trips').onSnapshot((snapshot) => {
+        const tripList = document.getElementById('tripList');
+        tripList.innerHTML = '';
+        
+        if (snapshot.empty) {
+            tripList.innerHTML = '<p>No trips created yet</p>';
+            return;
+        }
+        
+        snapshot.forEach(doc => {
+            const trip = doc.data();
+            const tripElement = document.createElement('div');
+            tripElement.className = 'trip-item';
+            tripElement.innerHTML = `
                 <h3>${trip.name}</h3>
                 <p>Destination: ${trip.destination}</p>
                 <p>Date: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}</p>
-            </div>
-            <div class="trip-actions">
-                <button onclick="openTrip(${trip.id})" class="action-button">Open</button>
-                <button onclick="deleteTrip(${trip.id})" class="action-button delete">Delete</button>
-            </div>
-        `;
-        tripList.appendChild(tripItem);
+                <p class="share-code">Share Code: ${trip.shareCode}</p>
+                <div class="trip-actions">
+                    <button onclick="openTrip('${trip.id}')" class="action-button">Open</button>
+                    <button onclick="deleteTrip('${trip.id}')" class="action-button delete">Delete</button>
+                </div>
+            `;
+            tripList.appendChild(tripElement);
+        });
+    }, (error) => {
+        console.error('Error listening to trips:', error);
+        const tripList = document.getElementById('tripList');
+        tripList.innerHTML = '<p>Error loading trips. Please refresh the page.</p>';
     });
+}
+
+// Update showFeatures to use real-time listener
+function showFeatures() {
+    document.getElementById('home-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'block';
+    document.getElementById('trip-details-page').style.display = 'none';
+    currentTrip = null;
+    currentTripId = null;
+    updateWeatherInput();
+    
+    // Setup real-time listener for trip list
+    if (tripListener) {
+        tripListener();
+        tripListener = null;
+    }
+    tripListener = setupTripListListener();
+}
+
+// Update deleteTrip to handle real-time updates
+async function deleteTrip(tripId) {
+    if (confirm('Are you sure you want to delete this trip?')) {
+        try {
+            await db.collection('trips').doc(tripId).delete();
+            console.log('Trip deleted successfully:', tripId);
+            
+            // If we're viewing the deleted trip, go back to features page
+            if (currentTripId === tripId) {
+                showFeatures();
+            }
+        } catch (error) {
+            console.error('Error deleting trip:', error);
+            alert('There was an error deleting the trip. Please try again.');
+        }
+    }
 }
 
 async function getCoordinatesForLocation(location) {
@@ -177,98 +386,49 @@ function updateWeatherInput() {
     }
 }
 
-async function openTrip(tripId) {
-    currentTripId = tripId;
-    currentTrip = trips.find(trip => trip.id === tripId);
-    if (currentTrip) {
-        document.getElementById('tripDetailsTitle').textContent = currentTrip.name;
-        document.getElementById('tripDetailsDestination').textContent = `Destination: ${currentTrip.destination}`;
-        document.getElementById('tripDetailsDate').textContent = 
-            `Trip Date: ${new Date(currentTrip.startDate).toLocaleDateString()} - ${new Date(currentTrip.endDate).toLocaleDateString()}`;
-        
-        // Show trip details page
-        document.getElementById('features-page').style.display = 'none';
-        document.getElementById('trip-details-page').style.display = 'block';
-        
-        // Update expense list and chart
+async function addExpense() {
+    if (!currentTrip) return;
+
+    try {
+        const amount = document.getElementById('expenseAmount').value;
+        const description = document.getElementById('expenseDescription').value;
+        const category = document.getElementById('expenseCategory').value;
+
+        if (!amount || !description) {
+            alert('Please fill in both amount and description');
+            return;
+        }
+
+        const newExpense = {
+            amount: parseFloat(amount),
+            description: description,
+            category: category,
+            date: new Date().toLocaleDateString()
+        };
+
+        // Add expense to Firebase
+        await db.collection('trips').doc(currentTrip.id).update({
+            expenses: firebase.firestore.FieldValue.arrayUnion(newExpense)
+        });
+
+        // Update local state
+        if (!currentTrip.expenses) {
+            currentTrip.expenses = [];
+        }
+        currentTrip.expenses.push(newExpense);
+
+        // Update the UI
         updateExpenseList();
         updateExpenseChart();
         updateTotalExpenses();
-
-        // Update weather input but don't clear existing weather data
-        updateWeatherInput();
         
-        // Only fetch new weather if we don't have any weather data displayed
-        const weatherResult = document.getElementById('weatherResult');
-        if (!weatherResult.innerHTML) {
-            const locationData = await getCoordinatesForLocation(currentTrip.destination);
-            if (locationData) {
-                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
-            } else {
-                weatherResult.innerHTML = `
-                    <div class="weather-result">
-                        <h3>Weather for ${currentTrip.destination}</h3>
-                        <div class="weather-details">
-                            <p class="error">Unable to find weather data for this destination. Please try searching for a specific city.</p>
-                        </div>
-                    </div>
-                `;
-            }
-        }
+        // Clear form
+        document.getElementById('expenseAmount').value = '';
+        document.getElementById('expenseDescription').value = '';
+    } catch (error) {
+        console.error('Error adding expense:', error);
+        alert('There was an error adding the expense. Please try again.');
     }
-}
-
-function deleteTrip(tripId) {
-    if (confirm('Are you sure you want to delete this trip?')) {
-        trips = trips.filter(trip => trip.id !== tripId);
-        if (currentTrip && currentTrip.id === tripId) {
-            currentTrip = null;
-        }
-        updateTripList();
-    }
-}
-
-function goBack() {
-    document.getElementById('trip-details-page').style.display = 'none';
-    document.getElementById('features-page').style.display = 'block';
-    document.getElementById('home-page').style.display = 'none';
-    currentTrip = null;
-    updateWeatherInput();
-}
-
-function addExpense() {
-    if (!currentTrip) return;
-
-    const amount = document.getElementById('expenseAmount').value;
-    const description = document.getElementById('expenseDescription').value;
-    const category = document.getElementById('expenseCategory').value;
-
-    if (!amount || !description) {
-        alert('Please fill in both amount and description');
-        return;
-    }
-
-    // Initialize expenses array if it doesn't exist
-    if (!currentTrip.expenses) {
-        currentTrip.expenses = [];
-    }
-
-    // Add new expense
-    currentTrip.expenses.push({
-        amount: parseFloat(amount),
-        description: description,
-        category: category,
-        date: new Date().toLocaleDateString()
-    });
-
-    // Update the UI
-    updateExpenseList();
-    updateExpenseChart();
-    updateTotalExpenses();
-    
-    // Clear form
-    document.getElementById('expenseAmount').value = '';
-    document.getElementById('expenseDescription').value = '';
 }
 
 function updateExpenseList() {
@@ -299,16 +459,35 @@ function updateExpenseList() {
     });
 }
 
-function deleteExpense(index) {
+async function deleteExpense(index) {
+    if (!currentTrip || !currentTrip.expenses) return;
+
     if (confirm('Are you sure you want to delete this expense?')) {
-        currentTrip.expenses.splice(index, 1);
-        updateExpenseList();
-        updateExpenseChart();
-        updateTotalExpenses();
+        try {
+            const expenseToDelete = currentTrip.expenses[index];
+            
+            // Remove expense from Firebase
+            await db.collection('trips').doc(currentTrip.id).update({
+                expenses: firebase.firestore.FieldValue.arrayRemove(expenseToDelete)
+            });
+
+            // Update local state
+            currentTrip.expenses.splice(index, 1);
+            
+            // Update the UI
+            updateExpenseList();
+            updateExpenseChart();
+            updateTotalExpenses();
+        } catch (error) {
+            console.error('Error deleting expense:', error);
+            alert('There was an error deleting the expense. Please try again.');
+        }
     }
 }
 
-function editExpense(index) {
+async function editExpense(index) {
+    if (!currentTrip || !currentTrip.expenses) return;
+    
     const expense = currentTrip.expenses[index];
     
     // Fill the form with the expense data
@@ -326,35 +505,53 @@ function editExpense(index) {
     document.querySelector('.expense-form').scrollIntoView({ behavior: 'smooth' });
 }
 
-function updateExpense(index) {
-    const amount = document.getElementById('expenseAmount').value;
-    const description = document.getElementById('expenseDescription').value;
-    const category = document.getElementById('expenseCategory').value;
+async function updateExpense(index) {
+    if (!currentTrip || !currentTrip.expenses) return;
 
-    if (!amount || !description) {
-        alert('Please fill in both amount and description');
-        return;
+    try {
+        const amount = document.getElementById('expenseAmount').value;
+        const description = document.getElementById('expenseDescription').value;
+        const category = document.getElementById('expenseCategory').value;
+
+        if (!amount || !description) {
+            alert('Please fill in both amount and description');
+            return;
+        }
+
+        const oldExpense = currentTrip.expenses[index];
+        const newExpense = {
+            amount: parseFloat(amount),
+            description: description,
+            category: category,
+            date: oldExpense.date // Keep the original date
+        };
+
+        // Update expense in Firebase
+        await db.collection('trips').doc(currentTrip.id).update({
+            expenses: firebase.firestore.FieldValue.arrayRemove(oldExpense)
+        });
+        await db.collection('trips').doc(currentTrip.id).update({
+            expenses: firebase.firestore.FieldValue.arrayUnion(newExpense)
+        });
+
+        // Update local state
+        currentTrip.expenses[index] = newExpense;
+
+        // Update the UI
+        updateExpenseList();
+        updateExpenseChart();
+        updateTotalExpenses();
+        
+        // Clear form and reset the button
+        document.getElementById('expenseAmount').value = '';
+        document.getElementById('expenseDescription').value = '';
+        const addButton = document.querySelector('button[onclick="updateExpense(' + index + ')"]');
+        addButton.textContent = 'Add Expense';
+        addButton.onclick = addExpense;
+    } catch (error) {
+        console.error('Error updating expense:', error);
+        alert('There was an error updating the expense. Please try again.');
     }
-
-    // Update the expense
-    currentTrip.expenses[index] = {
-        amount: parseFloat(amount),
-        description: description,
-        category: category,
-        date: currentTrip.expenses[index].date // Keep the original date
-    };
-
-    // Update the UI
-    updateExpenseList();
-    updateExpenseChart();
-    updateTotalExpenses();
-    
-    // Clear form and reset the button
-    document.getElementById('expenseAmount').value = '';
-    document.getElementById('expenseDescription').value = '';
-    const addButton = document.querySelector('button[onclick="updateExpense(' + index + ')"]');
-    addButton.textContent = 'Add Expense';
-    addButton.onclick = addExpense;
 }
 
 function updateTotalExpenses() {
@@ -362,8 +559,6 @@ function updateTotalExpenses() {
     const total = currentTrip.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     document.getElementById('totalExpenses').textContent = total.toFixed(2);
 }
-
-let expenseChart = null;
 
 function updateExpenseChart() {
     if (!currentTrip || !currentTrip.expenses || currentTrip.expenses.length === 0) {
@@ -746,12 +941,8 @@ function showHome() {
     document.getElementById('home-page').style.display = 'block';
     document.getElementById('features-page').style.display = 'none';
     document.getElementById('trip-details-page').style.display = 'none';
-}
-
-function showFeatures() {
-    document.getElementById('home-page').style.display = 'none';
-    document.getElementById('features-page').style.display = 'block';
-    document.getElementById('trip-details-page').style.display = 'none';
+    currentTrip = null;
+    updateWeatherInput();
 }
 
 // Collaboration feature
@@ -777,38 +968,6 @@ function shareTrip(tripId) {
     
     // Update the UI to show the share code and collaborators
     updateTripDetails(tripId);
-}
-
-function joinTrip() {
-    const shareCode = document.getElementById('joinCode').value.toUpperCase();
-    console.log('Attempting to join trip with code:', shareCode);
-    
-    const trips = JSON.parse(localStorage.getItem('trips')) || [];
-    console.log('Available trips:', trips);
-    
-    const trip = trips.find(t => t.shareCode === shareCode);
-    console.log('Found trip:', trip);
-    
-    if (!trip) {
-        alert('Invalid share code. Please try again.');
-        return;
-    }
-    
-    // Add user as collaborator if not already added
-    const userName = prompt('Enter your name:');
-    if (!userName) return;
-    
-    console.log('Adding user:', userName, 'to trip:', trip.name);
-    
-    if (!trip.collaborators.some(c => c.name === userName)) {
-        trip.collaborators.push({ name: userName, role: 'collaborator' });
-        localStorage.setItem('trips', JSON.stringify(trips));
-        console.log('Successfully added user to trip');
-        alert('Successfully joined the trip!');
-        window.location.href = `trip-details.html?id=${trip.id}`;
-    } else {
-        alert('You are already a collaborator on this trip.');
-    }
 }
 
 // Update the updateTripDetails function to show collaboration features
