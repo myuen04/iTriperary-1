@@ -11,8 +11,8 @@ const firebaseConfig = {
 // Initialize Firebase with error handling
 let db;
 try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
+    const app = firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore(app);
     console.log('Firebase initialized successfully');
 } catch (error) {
     console.error('Error initializing Firebase:', error);

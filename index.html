@@ -172,6 +172,15 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script>
+        // Add error handling for Firebase script loading
+        window.addEventListener('error', function(e) {
+            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('firebase')) {
+                console.error('Error loading Firebase:', e);
+                alert('Error loading Firebase. Please check your internet connection and try again.');
+            }
+        }, true);
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
