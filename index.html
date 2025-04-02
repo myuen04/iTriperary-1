@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iTriperary - Trip Planning Made Simple</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
     <div class="features-page" id="features-page">
         <div class="header">
             <h1>iTriperary</h1>
@@ -45,7 +43,23 @@
             <h1 id="tripDetailsTitle"></h1>
             <p id="tripDetailsDestination"></p>
             <p id="tripDetailsDate"></p>
-            <button class="back-button" onclick="goBack()">Back to Trips</button>
+            <div class="header-actions">
+                <button class="back-button" onclick="goBack()">Back to Trips</button>
+                <button class="share-button" onclick="showShareDialog()">Share Trip</button>
+            </div>
+        </div>
+
+        <!-- Share Dialog -->
+        <div id="shareDialog" class="share-dialog" style="display: none;">
+            <div class="share-dialog-content">
+                <h3>Share Trip</h3>
+                <p>Anyone with this link can view and edit this trip:</p>
+                <div class="share-link-container">
+                    <input type="text" id="shareLink" readonly>
+                    <button onclick="copyShareLink()" class="copy-button">Copy Link</button>
+                </div>
+                <button onclick="closeShareDialog()" class="close-button">Close</button>
+            </div>
         </div>
 
         <div class="features-grid">
@@ -119,7 +133,17 @@
         </div>
     </div>
 
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <!-- Firebase Config -->
+    <script src="firebase-config.js"></script>
+    
+    <!-- Main Script -->
     <script src="script.js"></script>
 </body>
 </html>
