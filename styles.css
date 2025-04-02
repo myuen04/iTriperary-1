@@ -939,3 +939,34 @@ button:hover {
 .collaborator:last-child {
     margin-right: 0;
 }
+
+.share-code-input {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.share-code-input input {
+    width: 200px;
+    text-align: center;
+    font-size: 1.1em;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.generate-code-button {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.3s;
+}
+
+.generate-code-button:hover {
+    background: #45a049;
+}
