@@ -381,29 +381,42 @@ async function joinTrip() {
         const shareCode = document.getElementById('joinCode').value.toUpperCase();
         console.log('Attempting to join trip with code:', shareCode);
         
-        const tripQuery = await db.collection('trips').where('shareCode', '==', shareCode).get();
-        
-        if (tripQuery.empty) {
-            alert('Invalid share code. Please try again.');
+        // Add better validation
+        if (!shareCode || shareCode.length !== 6) {
+            alert('Please enter a valid 6-character share code');
             return;
         }
 
-        const trip = tripQuery.docs[0].data();
-        const userName = prompt('Enter your name:');
+        // Query Firebase with better error handling
+        const tripQuery = await db.collection('trips')
+            .where('shareCode', '==', shareCode)
+            .get();
         
+        console.log('Firebase query result:', tripQuery.empty ? 'No trip found' : 'Trip found');
+        
+        if (tripQuery.empty) {
+            alert('Invalid share code. Please check and try again.');
+            return;
+        }
+
+        const tripDoc = tripQuery.docs[0];
+        const trip = tripDoc.data();
+        console.log('Found trip:', trip.name);
+        
+        const userName = prompt('Enter your name:');
         if (!userName) return;
 
         // Check if user is already a collaborator
         if (!trip.collaborators.some(c => c.name === userName)) {
             // Update collaborators array
-            await db.collection('trips').doc(trip.id).update({
+            await db.collection('trips').doc(tripDoc.id).update({
                 collaborators: firebase.firestore.FieldValue.arrayUnion({
                     name: userName,
                     role: 'collaborator'
                 })
             });
 
-            console.log('Successfully joined trip:', trip.id);
+            console.log('Successfully joined trip:', tripDoc.id);
             alert('Successfully joined the trip!');
             
             // Update the join trip section to show the user's name
@@ -414,8 +427,8 @@ async function joinTrip() {
                 <p class="joined-user">Joined as: ${userName}</p>
             `;
             
-            // Open the trip instead of redirecting
-            openTrip(trip.id);
+            // Open the trip
+            openTrip(tripDoc.id);
         } else {
             alert('You are already a collaborator on this trip.');
         }
