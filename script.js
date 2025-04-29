@@ -1,257 +1,24 @@
-// Initialize Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyBwOD8qgTe_4iDZ5KddKPEfS98qmvahI1o",
-    authDomain: "itriperary-96237.firebaseapp.com",
-    projectId: "itriperary-96237",
-    storageBucket: "itriperary-96237.firebasestorage.app",
-    messagingSenderId: "722774240779",
-    appId: "1:722774240779:web:820eb4cf13d92f9293e10e"
+let currentTrip = null;
+let trips = []; // Store all trips
+
+// Make showFeatures globally available
+window.showFeatures = function() {
+    document.getElementById('home-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'block';
+    document.getElementById('trip-details-page').style.display = 'none';
+    updateTripList();
 };
 
-// Initialize Firebase with error handling
-let db;
-try {
-    const app = firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore(app);
-    console.log('Firebase initialized successfully');
-} catch (error) {
-    console.error('Error initializing Firebase:', error);
-    alert('Error initializing the application. Please check the console for details.');
-}
-
-// Global state management
-const state = {
-    currentTrip: null,
-    currentTripId: null,
-    trips: [],
-    expenseChart: null,
-    listeners: {
-        trip: null,
-        tripList: null
-    }
+// Add goToHome function
+window.goToHome = function() {
+    document.getElementById('home-page').style.display = 'block';
+    document.getElementById('features-page').style.display = 'none';
+    document.getElementById('trip-details-page').style.display = 'none';
 };
-
-// Debounce function for performance optimization
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// Optimized cleanup function
-function cleanupListeners() {
-    Object.values(state.listeners).forEach(listener => {
-        if (listener) {
-            listener();
-        }
-    });
-    state.listeners = {
-        trip: null,
-        tripList: null
-    };
-}
-
-// Optimized UI update function
-function updateUI() {
-    if (!state.currentTrip) return;
-    
-    // Batch DOM updates
-    const updates = {
-        tripDetailsTitle: state.currentTrip.name,
-        tripDetailsDestination: `Destination: ${state.currentTrip.destination}`,
-        tripDetailsDate: `Trip Date: ${new Date(state.currentTrip.startDate).toLocaleDateString()} - ${new Date(state.currentTrip.endDate).toLocaleDateString()}`
-    };
-
-    // Apply updates
-    Object.entries(updates).forEach(([id, value]) => {
-        const element = document.getElementById(id);
-        if (element) element.textContent = value;
-    });
-
-    // Update expenses
-    updateExpenseList();
-    updateExpenseChart();
-    updateTotalExpenses();
-    
-    // Update weather if needed
-    const weatherResult = document.getElementById('weatherResult');
-    if (!weatherResult.innerHTML) {
-        getCoordinatesForLocation(state.currentTrip.destination).then(locationData => {
-            if (locationData) {
-                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
-            }
-        });
-    }
-}
-
-// Optimized trip listener setup
-function setupTripListener(tripId) {
-    cleanupListeners();
-    
-    state.listeners.trip = db.collection('trips').doc(tripId).onSnapshot((doc) => {
-        if (doc.exists) {
-            state.currentTrip = doc.data();
-            state.currentTripId = tripId;
-            updateUI();
-        } else {
-            console.error('Trip not found');
-            showFeatures();
-        }
-    }, (error) => {
-        console.error('Error listening to trip updates:', error);
-        showFeatures();
-    });
-}
-
-// Optimized trip list listener
-function setupTripListListener() {
-    cleanupListeners();
-    
-    state.listeners.tripList = db.collection('trips').onSnapshot((snapshot) => {
-        const tripList = document.getElementById('tripList');
-        tripList.innerHTML = '';
-        
-        if (snapshot.empty) {
-            tripList.innerHTML = '<p>No trips created yet</p>';
-            return;
-        }
-        
-        const trips = [];
-        snapshot.forEach(doc => {
-            trips.push({ id: doc.id, ...doc.data() });
-        });
-        
-        state.trips = trips;
-        renderTripList(trips);
-    }, (error) => {
-        console.error('Error listening to trips:', error);
-        const tripList = document.getElementById('tripList');
-        tripList.innerHTML = '<p>Error loading trips. Please refresh the page.</p>';
-    });
-}
-
-// Separate render function for trip list
-function renderTripList(trips) {
-    const tripList = document.getElementById('tripList');
-    tripList.innerHTML = trips.map(trip => `
-        <div class="trip-item">
-            <h3>${trip.name}</h3>
-            <p>Destination: ${trip.destination}</p>
-            <p>Date: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}</p>
-            <p class="share-code">Share Code: ${trip.shareCode}</p>
-            <div class="collaborators-list">
-                <p>Collaborators: ${trip.collaborators.map(c => 
-                    `<span class="collaborator">${c.name}${c.role === 'owner' ? ' (Owner)' : ''}</span>`
-                ).join(', ')}</p>
-            </div>
-            <div class="trip-actions">
-                <button onclick="openTrip('${trip.id}')" class="action-button">Open</button>
-                <button onclick="deleteTrip('${trip.id}')" class="action-button delete">Delete</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Optimized expense updates
-const updateExpenseList = debounce(() => {
-    const expenseList = document.getElementById('expenseList');
-    if (!state.currentTrip || !state.currentTrip.expenses?.length) {
-        expenseList.innerHTML = '<p>No expenses added yet</p>';
-        return;
-    }
-
-    expenseList.innerHTML = state.currentTrip.expenses.map((expense, index) => `
-        <div class="expense-item">
-            <div class="expense-content">
-                <p><strong>${expense.description}</strong></p>
-                <p>Amount: $${expense.amount.toFixed(2)}</p>
-                <p>Category: ${expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}</p>
-                <p>Date: ${expense.date}</p>
-            </div>
-            <div class="expense-actions">
-                <button onclick="editExpense(${index})" class="action-button edit">Edit</button>
-                <button onclick="deleteExpense(${index})" class="action-button delete">Delete</button>
-            </div>
-        </div>
-    `).join('');
-}, 100);
-
-// Optimized chart updates
-const updateExpenseChart = debounce(() => {
-    if (!state.currentTrip?.expenses?.length) {
-        if (state.expenseChart) {
-            state.expenseChart.destroy();
-            state.expenseChart = null;
-        }
-        return;
-    }
-
-    const ctx = document.getElementById('expenseChart').getContext('2d');
-    if (state.expenseChart) {
-        state.expenseChart.destroy();
-    }
-
-    const categoryTotals = state.currentTrip.expenses.reduce((acc, expense) => {
-        acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-        return acc;
-    }, {});
-
-    const categories = Object.keys(categoryTotals);
-    const amounts = Object.values(categoryTotals);
-
-    state.expenseChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: categories.map(cat => {
-                const categoryNames = {
-                    'food': 'Food & Dining',
-                    'activities': 'Activities & Entertainment',
-                    'accommodation': 'Accommodation',
-                    'transportation': 'Transportation',
-                    'shopping': 'Shopping',
-                    'miscellaneous': 'Miscellaneous'
-                };
-                return categoryNames[cat] || cat;
-            }),
-            datasets: [{
-                data: amounts,
-                backgroundColor: [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { position: 'right' },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.raw;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
-                            return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}, 100);
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    // Show home page by default
-    showHome();
-    
-    // Initialize any other necessary components
-    initializeCharts();
+    updateTripList();
     
     // Setup location input
     const locationInput = document.getElementById('location');
@@ -268,251 +35,106 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    if (window.location.pathname.endsWith('index.html')) {
-        addJoinForm();
-    }
 });
 
-// Add this function to generate random share codes
-function generateRandomShareCode() {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    document.getElementById('shareCode').value = code;
-}
+function createTrip() {
+    const tripName = document.getElementById('tripName').value;
+    const tripDestination = document.getElementById('tripDestination').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
 
-// Update createTrip function to handle optional share codes
-async function createTrip() {
-    try {
-        const tripName = document.getElementById('tripName').value;
-        const tripDestination = document.getElementById('tripDestination').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        let shareCode = document.getElementById('shareCode').value.toUpperCase();
-
-        if (!tripName || !tripDestination || !startDate || !endDate) {
-            alert('Please fill in all required fields');
-            return;
-        }
-
-        if (new Date(startDate) > new Date(endDate)) {
-            alert('Start date must be before end date');
-            return;
-        }
-
-        // Generate a random share code if none provided
-        if (!shareCode) {
-            shareCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        } else if (!/^[A-Z0-9]{6}$/.test(shareCode)) {
-            alert('Share code must be exactly 6 characters (letters or numbers)');
-            return;
-        }
-
-        // Check if share code is already in use
-        const existingTrip = await db.collection('trips').where('shareCode', '==', shareCode).get();
-        if (!existingTrip.empty) {
-            alert('This share code is already in use. Please choose a different one or generate a new one.');
-            return;
-        }
-
-        const apiKey = 'cac3923cef164a92bec0a99632bafc53';
-        const geoApiUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(tripDestination)}&apiKey=${apiKey}`;
-
-        const response = await fetch(geoApiUrl);
-        const result = await response.json();
-        
-        if (result.features && result.features.length > 0) {
-            const validatedDestination = result.features[0].properties.formatted;
-
-            // Create a new document reference
-            const tripRef = db.collection('trips').doc();
-            
-            const tripData = {
-                id: tripRef.id, // Use the Firebase document ID
-                name: tripName,
-                destination: tripDestination,
-                startDate: startDate,
-                endDate: endDate,
-                shareCode: shareCode,
-                collaborators: [{ name: 'You (Owner)', role: 'owner' }],
-                expenses: [],
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            // Save to Firebase
-            await tripRef.set(tripData);
-            console.log('Trip created successfully:', tripRef.id);
-
-            // Update UI
-            state.currentTrip = tripData;
-            state.currentTripId = tripRef.id;
-
-            // Show trip details page
-            document.getElementById('home-page').style.display = 'none';
-            document.getElementById('features-page').style.display = 'none';
-            document.getElementById('trip-details-page').style.display = 'block';
-
-            // Update trip details
-            document.getElementById('tripDetailsTitle').textContent = tripName;
-            document.getElementById('tripDetailsDestination').textContent = `Destination: ${tripDestination}`;
-            document.getElementById('tripDetailsDate').textContent = 
-                `Trip Date: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
-
-            // Clear form
-            document.getElementById('tripName').value = '';
-            document.getElementById('tripDestination').value = '';
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
-            document.getElementById('shareCode').value = '';
-
-            // Update the trip list
-            updateTripList();
-        } else {
-            alert("Could not validate destination. Please enter a more specific location.");
-        }
-    } catch (error) {
-        console.error('Error creating trip:', error);
-        alert("There was an error creating the trip. Please try again.");
+    if (!tripName || !tripDestination || !startDate || !endDate) {
+        alert('Please fill in all fields');
+        return;
     }
-}
 
-// Update joinTrip function to use Firebase
-async function joinTrip() {
-    try {
-        const shareCode = document.getElementById('joinCode').value.toUpperCase();
-        console.log('Attempting to join trip with code:', shareCode);
-        
-        // Add better validation
-        if (!shareCode || shareCode.length !== 6) {
-            alert('Please enter a valid 6-character share code');
-            return;
-        }
-
-        // Query Firebase with better error handling
-        const tripQuery = await db.collection('trips')
-            .where('shareCode', '==', shareCode)
-            .get();
-        
-        console.log('Firebase query result:', tripQuery.empty ? 'No trip found' : 'Trip found');
-        
-        if (tripQuery.empty) {
-            alert('Invalid share code. Please check and try again.');
-            return;
-        }
-
-        const tripDoc = tripQuery.docs[0];
-        const trip = tripDoc.data();
-        console.log('Found trip:', trip.name);
-        
-        const userName = prompt('Enter your name:');
-        if (!userName) return;
-
-        // Check if user is already a collaborator
-        if (!trip.collaborators.some(c => c.name === userName)) {
-            // Update collaborators array
-            await db.collection('trips').doc(tripDoc.id).update({
-                collaborators: firebase.firestore.FieldValue.arrayUnion({
-                    name: userName,
-                    role: 'collaborator'
-                })
-            });
-
-            console.log('Successfully joined trip:', tripDoc.id);
-            alert('Successfully joined the trip!');
-            
-            // Update the join trip section to show the user's name
-            const joinTripSection = document.querySelector('.join-trip-section');
-            joinTripSection.innerHTML = `
-                <input type="text" id="joinCode" placeholder="Enter share code" maxlength="6" pattern="[A-Za-z0-9]{6}">
-                <button onclick="joinTrip()" class="join-button">Join Trip</button>
-                <p class="joined-user">Joined as: ${userName}</p>
-            `;
-            
-            // Open the trip
-            openTrip(tripDoc.id);
-        } else {
-            alert('You are already a collaborator on this trip.');
-        }
-    } catch (error) {
-        console.error('Error joining trip:', error);
-        alert('There was an error joining the trip. Please try again.');
+    if (new Date(startDate) > new Date(endDate)) {
+        alert('Start date must be before end date');
+        return;
     }
-}
+    const apiKey = 'cac3923cef164a92bec0a99632bafc53';
+    const geoApiUrl = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(tripDestination)}&apiKey=${apiKey}`;
 
-// Update openTrip function to use real-time listener
-async function openTrip(tripId) {
-    try {
-        cleanupListeners();
-        
-        const tripDoc = await db.collection('trips').doc(tripId).get();
-        if (!tripDoc.exists) {
-            alert('Trip not found');
-            return;
-        }
+    fetch(geoApiUrl)
+        .then(response => response.json())
+        .then(result => {
+            if (result.features && result.features.length > 0) {
+                const validatedDestination = result.features[0].properties.formatted;
 
-        state.currentTrip = tripDoc.data();
-        state.currentTripId = tripId;
+                currentTrip = {
+                    id: Date.now(),
+                    name: tripName,
+                    destination: tripDestination,
+                    startDate: startDate,
+                    endDate: endDate,
+                    expenses: [],
+                    shareCode: generateShareCode(),
+                    collaborators: []
+                };
 
-        // Show trip details page
-        document.getElementById('features-page').style.display = 'none';
-        document.getElementById('trip-details-page').style.display = 'block';
+                // Add trip to the trips array
+                trips.push(currentTrip);
 
-        // Update trip details
-        document.getElementById('tripDetailsTitle').textContent = state.currentTrip.name;
-        document.getElementById('tripDetailsDestination').textContent = `Destination: ${state.currentTrip.destination}`;
-        document.getElementById('tripDetailsDate').textContent = 
-            `Trip Date: ${new Date(state.currentTrip.startDate).toLocaleDateString()} - ${new Date(state.currentTrip.endDate).toLocaleDateString()}`;
+                // Update trip details page
+                document.getElementById('tripDetailsTitle').textContent = tripName;
+                document.getElementById('tripDetailsDestination').textContent = `Destination: ${tripDestination}`;
+                document.getElementById('tripDetailsDate').textContent = 
+                    `Trip Date: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`;
 
-        // Setup real-time listener for this trip
-        state.listeners.trip = db.collection('trips').doc(tripId).onSnapshot((doc) => {
-            if (doc.exists) {
-                state.currentTrip = doc.data();
-                updateUI();
+                // Show trip details page
+                document.getElementById('features-page').style.display = 'none';
+                document.getElementById('trip-details-page').style.display = 'block';
+
+                // Clear form
+                document.getElementById('tripName').value = '';
+                document.getElementById('tripDestination').value = '';
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+
+                // Update the trip list
+                updateTripList();
             } else {
-                console.error('Trip not found');
-                showFeatures();
+                alert("Could not validate destination. Please enter a more specific location.");
             }
+        })
+        .catch(error => {
+            console.error('API error:', error);
+            alert("There was an error validating the destination.");
         });
-        
-        // Initial UI update
-        updateUI();
-    } catch (error) {
-        console.error('Error opening trip:', error);
-        alert('There was an error opening the trip. Please try again.');
-    }
 }
 
-// Update showFeatures to use real-time listener
-function showFeatures() {
-    cleanupListeners();
-    document.getElementById('home-page').style.display = 'none';
-    document.getElementById('features-page').style.display = 'block';
-    document.getElementById('trip-details-page').style.display = 'none';
-    state.currentTrip = null;
-    state.currentTripId = null;
-    updateWeatherInput();
-    
-    // Setup trip list listener
-    if (!state.listeners.tripList) {
-        state.listeners.tripList = setupTripListListener();
-    }
+// Generate a random share code
+function generateShareCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// Update deleteTrip to handle real-time updates
-async function deleteTrip(tripId) {
-    if (confirm('Are you sure you want to delete this trip?')) {
-        try {
-            await db.collection('trips').doc(tripId).delete();
-            console.log('Trip deleted successfully:', tripId);
-            
-            // If we're viewing the deleted trip, go back to features page
-            if (state.currentTripId === tripId) {
-                showFeatures();
-            }
-        } catch (error) {
-            console.error('Error deleting trip:', error);
-            alert('There was an error deleting the trip. Please try again.');
-        }
+function updateTripList() {
+    const tripList = document.getElementById('tripList');
+    tripList.innerHTML = '';
+
+    if (trips.length === 0) {
+        tripList.innerHTML = '<p>No trips created yet</p>';
+        return;
     }
+
+    trips.forEach(trip => {
+        const tripItem = document.createElement('div');
+        tripItem.className = 'trip-item';
+        tripItem.innerHTML = `
+            <div class="trip-info">
+                <h3>${trip.name}</h3>
+                <p>Destination: ${trip.destination}</p>
+                <p>Date: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}</p>
+                <p class="collaborators">Collaborators: ${trip.collaborators.length > 0 ? trip.collaborators.join(', ') : 'None'}</p>
+            </div>
+            <div class="trip-actions">
+                <button onclick="openTrip(${trip.id})" class="action-button">Open</button>
+                <button onclick="shareTrip('${trip.shareCode}')" class="action-button share">Share</button>
+                <button onclick="deleteTrip(${trip.id})" class="action-button delete">Delete</button>
+            </div>
+        `;
+        tripList.appendChild(tripItem);
+    });
 }
 
 async function getCoordinatesForLocation(location) {
@@ -544,8 +166,8 @@ async function getCoordinatesForLocation(location) {
 
 function updateWeatherInput() {
     const locationInput = document.getElementById('location');
-    if (state.currentTrip) {
-        locationInput.value = state.currentTrip.destination;
+    if (currentTrip) {
+        locationInput.value = currentTrip.destination;
         locationInput.disabled = true;
         locationInput.placeholder = "Weather for trip destination";
     } else {
@@ -555,81 +177,138 @@ function updateWeatherInput() {
     }
 }
 
-async function addExpense() {
-    if (!state.currentTrip) return;
-
-    try {
-        const amount = document.getElementById('expenseAmount').value;
-        const description = document.getElementById('expenseDescription').value;
-        const category = document.getElementById('expenseCategory').value;
-
-        if (!amount || !description) {
-            alert('Please fill in both amount and description');
-            return;
-        }
-
-        const newExpense = {
-            amount: parseFloat(amount),
-            description: description,
-            category: category,
-            date: new Date().toLocaleDateString()
-        };
-
-        // Add expense to Firebase
-        await db.collection('trips').doc(state.currentTrip.id).update({
-            expenses: firebase.firestore.FieldValue.arrayUnion(newExpense)
-        });
-
-        // Update local state
-        if (!state.currentTrip.expenses) {
-            state.currentTrip.expenses = [];
-        }
-        state.currentTrip.expenses.push(newExpense);
-
-        // Update the UI
+async function openTrip(tripId) {
+    currentTrip = trips.find(trip => trip.id === tripId);
+    if (currentTrip) {
+        document.getElementById('tripDetailsTitle').textContent = currentTrip.name;
+        document.getElementById('tripDetailsDestination').textContent = `Destination: ${currentTrip.destination}`;
+        document.getElementById('tripDetailsDate').textContent = 
+            `Trip Date: ${new Date(currentTrip.startDate).toLocaleDateString()} - ${new Date(currentTrip.endDate).toLocaleDateString()}`;
+        
+        // Show trip details page
+        document.getElementById('features-page').style.display = 'none';
+        document.getElementById('trip-details-page').style.display = 'block';
+        
+        // Update expense list and chart
         updateExpenseList();
         updateExpenseChart();
         updateTotalExpenses();
+
+        // Update weather input but don't clear existing weather data
+        updateWeatherInput();
         
-        // Clear form
-        document.getElementById('expenseAmount').value = '';
-        document.getElementById('expenseDescription').value = '';
-    } catch (error) {
-        console.error('Error adding expense:', error);
-        alert('There was an error adding the expense. Please try again.');
-    }
-}
-
-async function deleteExpense(index) {
-    if (!state.currentTrip || !state.currentTrip.expenses) return;
-
-    if (confirm('Are you sure you want to delete this expense?')) {
-        try {
-            const expenseToDelete = state.currentTrip.expenses[index];
-            
-            // Remove expense from Firebase
-            await db.collection('trips').doc(state.currentTrip.id).update({
-                expenses: firebase.firestore.FieldValue.arrayRemove(expenseToDelete)
-            });
-
-            // Update local state
-            state.currentTrip.expenses.splice(index, 1);
-            
-            // Update the UI
-            updateExpenseList();
-            updateExpenseChart();
-            updateTotalExpenses();
-        } catch (error) {
-            console.error('Error deleting expense:', error);
-            alert('There was an error deleting the expense. Please try again.');
+        // Only fetch new weather if we don't have any weather data displayed
+        const weatherResult = document.getElementById('weatherResult');
+        if (!weatherResult.innerHTML) {
+            const locationData = await getCoordinatesForLocation(currentTrip.destination);
+            if (locationData) {
+                checkWeatherForLocation(locationData.name, locationData.lat, locationData.lon);
+            } else {
+                weatherResult.innerHTML = `
+                    <div class="weather-result">
+                        <h3>Weather for ${currentTrip.destination}</h3>
+                        <div class="weather-details">
+                            <p class="error">Unable to find weather data for this destination. Please try searching for a specific city.</p>
+                        </div>
+                    </div>
+                `;
+            }
         }
     }
 }
 
-async function editExpense(index) {
-    if (!state.currentTrip || !state.currentTrip.expenses) return;
+function deleteTrip(tripId) {
+    if (confirm('Are you sure you want to delete this trip?')) {
+        trips = trips.filter(trip => trip.id !== tripId);
+        if (currentTrip && currentTrip.id === tripId) {
+            currentTrip = null;
+        }
+        updateTripList();
+    }
+}
+
+function goBack() {
+    document.getElementById('trip-details-page').style.display = 'none';
+    document.getElementById('features-page').style.display = 'flex';
+    currentTrip = null;
+    // Don't clear weather data when going back
+    updateWeatherInput();
+}
+
+function addExpense() {
+    if (!currentTrip) return;
+
+    const amount = document.getElementById('expenseAmount').value;
+    const description = document.getElementById('expenseDescription').value;
+    const category = document.getElementById('expenseCategory').value;
+
+    if (!amount || !description) {
+        alert('Please fill in both amount and description');
+        return;
+    }
+
+    // Initialize expenses array if it doesn't exist
+    if (!currentTrip.expenses) {
+        currentTrip.expenses = [];
+    }
+
+    // Add new expense
+    currentTrip.expenses.push({
+        amount: parseFloat(amount),
+        description: description,
+        category: category,
+        date: new Date().toLocaleDateString()
+    });
+
+    // Update the UI
+    updateExpenseList();
+    updateExpenseChart();
+    updateTotalExpenses();
     
-    const expense = state.currentTrip.expenses[index];
+    // Clear form
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseDescription').value = '';
+}
+
+function updateExpenseList() {
+    const expenseList = document.getElementById('expenseList');
+    expenseList.innerHTML = '';
+
+    if (!currentTrip || currentTrip.expenses.length === 0) {
+        expenseList.innerHTML = '<p>No expenses added yet</p>';
+        return;
+    }
+
+    currentTrip.expenses.forEach((expense, index) => {
+        const expenseItem = document.createElement('div');
+        expenseItem.className = 'expense-item';
+        expenseItem.innerHTML = `
+            <div class="expense-content">
+                <p><strong>${expense.description}</strong></p>
+                <p>Amount: $${expense.amount.toFixed(2)}</p>
+                <p>Category: ${expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}</p>
+                <p>Date: ${expense.date}</p>
+            </div>
+            <div class="expense-actions">
+                <button onclick="editExpense(${index})" class="action-button edit">Edit</button>
+                <button onclick="deleteExpense(${index})" class="action-button delete">Delete</button>
+            </div>
+        `;
+        expenseList.appendChild(expenseItem);
+    });
+}
+
+function deleteExpense(index) {
+    if (confirm('Are you sure you want to delete this expense?')) {
+        currentTrip.expenses.splice(index, 1);
+        updateExpenseList();
+        updateExpenseChart();
+        updateTotalExpenses();
+    }
+}
+
+function editExpense(index) {
+    const expense = currentTrip.expenses[index];
     
     // Fill the form with the expense data
     document.getElementById('expenseAmount').value = expense.amount;
@@ -646,59 +325,198 @@ async function editExpense(index) {
     document.querySelector('.expense-form').scrollIntoView({ behavior: 'smooth' });
 }
 
-async function updateExpense(index) {
-    if (!state.currentTrip || !state.currentTrip.expenses) return;
+function updateExpense(index) {
+    const amount = document.getElementById('expenseAmount').value;
+    const description = document.getElementById('expenseDescription').value;
+    const category = document.getElementById('expenseCategory').value;
 
-    try {
-        const amount = document.getElementById('expenseAmount').value;
-        const description = document.getElementById('expenseDescription').value;
-        const category = document.getElementById('expenseCategory').value;
-
-        if (!amount || !description) {
-            alert('Please fill in both amount and description');
-            return;
-        }
-
-        const oldExpense = state.currentTrip.expenses[index];
-        const newExpense = {
-            amount: parseFloat(amount),
-            description: description,
-            category: category,
-            date: oldExpense.date // Keep the original date
-        };
-
-        // Update expense in Firebase
-        await db.collection('trips').doc(state.currentTrip.id).update({
-            expenses: firebase.firestore.FieldValue.arrayRemove(oldExpense)
-        });
-        await db.collection('trips').doc(state.currentTrip.id).update({
-            expenses: firebase.firestore.FieldValue.arrayUnion(newExpense)
-        });
-
-        // Update local state
-        state.currentTrip.expenses[index] = newExpense;
-
-        // Update the UI
-        updateExpenseList();
-        updateExpenseChart();
-        updateTotalExpenses();
-        
-        // Clear form and reset the button
-        document.getElementById('expenseAmount').value = '';
-        document.getElementById('expenseDescription').value = '';
-        const addButton = document.querySelector('button[onclick="updateExpense(' + index + ')"]');
-        addButton.textContent = 'Add Expense';
-        addButton.onclick = addExpense;
-    } catch (error) {
-        console.error('Error updating expense:', error);
-        alert('There was an error updating the expense. Please try again.');
+    if (!amount || !description) {
+        alert('Please fill in both amount and description');
+        return;
     }
+
+    // Update the expense
+    currentTrip.expenses[index] = {
+        amount: parseFloat(amount),
+        description: description,
+        category: category,
+        date: currentTrip.expenses[index].date // Keep the original date
+    };
+
+    // Update the UI
+    updateExpenseList();
+    updateExpenseChart();
+    updateTotalExpenses();
+    
+    // Clear form and reset the button
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseDescription').value = '';
+    const addButton = document.querySelector('button[onclick="updateExpense(' + index + ')"]');
+    addButton.textContent = 'Add Expense';
+    addButton.onclick = addExpense;
 }
 
 function updateTotalExpenses() {
-    if (!state.currentTrip || !state.currentTrip.expenses) return;
-    const total = state.currentTrip.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    if (!currentTrip || !currentTrip.expenses) return;
+    const total = currentTrip.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     document.getElementById('totalExpenses').textContent = total.toFixed(2);
+}
+
+let expenseChart = null;
+
+function updateExpenseChart() {
+    if (!currentTrip || !currentTrip.expenses || currentTrip.expenses.length === 0) {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        if (expenseChart) {
+            expenseChart.destroy();
+        }
+        expenseChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['No expenses yet'],
+                datasets: [{
+                    data: [1],
+                    backgroundColor: ['#e0e0e0']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+        return;
+    }
+
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    
+    // Remove old chart
+    if (expenseChart) {
+        expenseChart.destroy();
+    }
+
+    // Sum expenses by category
+    const categoryTotals = {};
+    currentTrip.expenses.forEach(expense => {
+        categoryTotals[expense.category] = (categoryTotals[expense.category] || 0) + expense.amount;
+    });
+
+    // Prep data for chart
+    const categories = Object.keys(categoryTotals);
+    const amounts = Object.values(categoryTotals);
+
+    // Create new chart
+    expenseChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: categories.map(cat => {
+                const categoryNames = {
+                    'food': 'Food & Dining',
+                    'activities': 'Activities & Entertainment',
+                    'accommodation': 'Accommodation',
+                    'transportation': 'Transportation',
+                    'shopping': 'Shopping',
+                    'miscellaneous': 'Miscellaneous'
+                };
+                return categoryNames[cat] || cat;
+            }),
+            datasets: [{
+                data: amounts,
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function convertCurrency() {
+    const amount = document.getElementById('amount').value;
+    const fromCurrency = document.getElementById('fromCurrency').value;
+    const toCurrency = document.getElementById('toCurrency').value;
+
+    if (!amount) {
+        alert('Please enter an amount to convert');
+        return;
+    }
+
+    try {
+        // Get exchange rates
+        const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${fromCurrency}`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch exchange rates');
+        }
+
+        const data = await response.json();
+        const rates = data.rates;
+        
+        // Format based on currency
+        const formatCurrency = (amount, currency) => {
+            switch (currency) {
+                case 'JPY':
+                    return Math.round(amount).toLocaleString('ja-JP');
+                case 'KRW':
+                    return Math.round(amount).toLocaleString('ko-KR');
+                default:
+                    return amount.toFixed(2);
+            }
+        };
+
+        const numericAmount = parseFloat(amount);
+        let convertedAmount;
+
+        if (fromCurrency === toCurrency) {
+            convertedAmount = numericAmount;
+        } else {
+            const rate = rates[toCurrency];
+            if (!rate) {
+                throw new Error('Currency conversion not available');
+            }
+            convertedAmount = numericAmount * rate;
+        }
+
+        // Calc rate for 1 unit
+        const rateForOne = convertedAmount / numericAmount;
+
+        document.getElementById('conversionResult').innerHTML = `
+            <div class="conversion-result">
+                <p class="conversion-amount">${formatCurrency(numericAmount, fromCurrency)} ${fromCurrency} = ${formatCurrency(convertedAmount, toCurrency)} ${toCurrency}</p>
+                <p class="conversion-rate">Rate: 1 ${fromCurrency} = ${formatCurrency(rateForOne, toCurrency)} ${toCurrency}</p>
+                <p class="conversion-time">Last updated: ${new Date().toLocaleTimeString()}</p>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('conversionResult').innerHTML = `
+            <p class="error">Error: ${error.message}. Please try again.</p>
+        `;
+    }
 }
 
 let weatherAutocompleteTimeout = null;
@@ -922,116 +740,33 @@ function displayWeather(weatherData, locationString, lat, lon) {
     `;
 }
 
-// Make navigation functions globally available
-window.showHome = function() {
-    cleanupListeners();
-    document.getElementById('home-page').style.display = 'block';
-    document.getElementById('features-page').style.display = 'none';
-    document.getElementById('trip-details-page').style.display = 'none';
-    state.currentTrip = null;
-    state.currentTripId = null;
-};
-
-window.showFeatures = function() {
-    cleanupListeners();
-    document.getElementById('home-page').style.display = 'none';
-    document.getElementById('features-page').style.display = 'block';
-    document.getElementById('trip-details-page').style.display = 'none';
-    state.currentTrip = null;
-    state.currentTripId = null;
-    
-    // Setup trip list listener
-    if (!state.listeners.tripList) {
-        state.listeners.tripList = setupTripListListener();
-    }
-};
-
-window.goBack = function() {
-    cleanupListeners();
-    document.getElementById('trip-details-page').style.display = 'none';
-    document.getElementById('features-page').style.display = 'block';
-    document.getElementById('home-page').style.display = 'none';
-    state.currentTrip = null;
-    state.currentTripId = null;
-    
-    // Setup trip list listener
-    if (!state.listeners.tripList) {
-        state.listeners.tripList = setupTripListListener();
-    }
-};
-
-// Collaboration feature
-function generateShareCode() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-function shareTrip(tripId) {
-    const trips = JSON.parse(localStorage.getItem('trips')) || [];
-    const trip = trips.find(t => t.id === tripId);
-    
-    if (!trip) {
-        alert('Trip not found');
-        return;
-    }
-    
+// Add share functionality
+function shareTrip(shareCode) {
     // Copy share code to clipboard
-    navigator.clipboard.writeText(trip.shareCode).then(() => {
-        alert('Share code copied to clipboard! Share this code with others to collaborate on this trip.');
-    }).catch(() => {
-        alert('Share code: ' + trip.shareCode + '\n\nPlease copy this code manually to share with others.');
+    navigator.clipboard.writeText(shareCode).then(() => {
+        alert(`Share Code: ${shareCode}\nCopied to clipboard! Share this code with others to collaborate on the trip.`);
+    }).catch(err => {
+        alert(`Share Code: ${shareCode}\nPlease copy this code to share with others.`);
     });
-    
-    // Update the UI to show the share code and collaborators
-    updateTripDetails(tripId);
 }
 
-// Update the updateTripDetails function to show collaboration features
-function updateTripDetails(tripId) {
-    const trips = JSON.parse(localStorage.getItem('trips')) || [];
-    const trip = trips.find(t => t.id === tripId);
-    
-    if (!trip) {
-        window.location.href = 'index.html';
-        return;
-    }
-    
-    // Update trip details in the header
-    document.getElementById('tripDetailsTitle').textContent = trip.name;
-    document.getElementById('tripDetailsDestination').textContent = `Destination: ${trip.destination}`;
-    document.getElementById('tripDetailsDate').textContent = 
-        `Trip Date: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`;
-    
-    // Update share section
-    const shareSection = document.querySelector('.share-section');
-    if (shareSection) {
-        shareSection.innerHTML = `
-            <h3>Collaboration</h3>
-            <p>Share this code with others:</p>
-            <div class="share-code">${trip.shareCode}</div>
-            <div class="collaborators">
-                <h4>Collaborators:</h4>
-                ${trip.collaborators.map(c => `
-                    <span class="collaborator">${c.name} ${c.role === 'owner' ? '(Owner)' : ''}</span>
-                `).join('')}
-            </div>
-        `;
-    }
-    
-    // Update other trip details
-    updateExpenseList();
-    updateExpenseChart();
-    updateTotalExpenses();
-    updateWeatherInput();
-}
+// Add join trip functionality
+function joinTrip() {
+    const shareCode = prompt("Enter the share code to join a trip:");
+    if (!shareCode) return;
 
-// Add join form to index.html
-function addJoinForm() {
-    const header = document.querySelector('.header');
-    const joinForm = document.createElement('div');
-    joinForm.className = 'join-form';
-    joinForm.innerHTML = `
-        <input type="text" id="joinCode" placeholder="Enter share code" maxlength="6">
-        <button onclick="joinTrip()">Join Trip</button>
-    `;
-    header.appendChild(joinForm);
+    const trip = trips.find(t => t.shareCode === shareCode.toUpperCase());
+    if (trip) {
+        const collaboratorName = prompt("Enter your name:");
+        if (collaboratorName) {
+            if (!trip.collaborators) {
+                trip.collaborators = [];
+            }
+            trip.collaborators.push(collaboratorName);
+            updateTripList();
+            openTrip(trip.id);
+        }
+    } else {
+        alert("Invalid share code. Please check and try again.");
+    }
 } 

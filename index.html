@@ -20,10 +20,6 @@
                 <p>Create, manage, and share your travel plans with ease</p>
                 <div class="hero-actions">
                     <button onclick="showFeatures()" class="cta-button">Start Planning</button>
-                    <div class="join-trip-section">
-                        <input type="text" id="joinCode" placeholder="Enter share code" maxlength="6" pattern="[A-Za-z0-9]{6}">
-                        <button onclick="joinTrip()" class="join-button">Join Trip</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -46,13 +42,34 @@
                 <p>Convert between different currencies for accurate budgeting.</p>
             </div>
         </div>
+
+        <div class="how-it-works">
+            <h2>How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Create a Trip</h3>
+                    <p>Start by creating a new trip with your destination and dates.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Track Expenses</h3>
+                    <p>Add expenses as you go and see them categorized in real-time.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Stay Informed</h3>
+                    <p>Check weather forecasts and convert currencies on the go.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="features-page" id="features-page" style="display: none;">
         <div class="header">
             <h1>iTriperary</h1>
             <p>Plan your trips together, effortlessly</p>
-            <button class="home-button" onclick="showHome()">Home</button>
+            <button onclick="goToHome()" class="back-to-home-button">Back to Home</button>
         </div>
 
         <div class="features-grid">
@@ -60,7 +77,9 @@
                 <h2>Trip Management</h2>
                 <div class="trip-form">
                     <input type="text" id="tripName" placeholder="Trip Name">
+
                     <input type="text" id="tripDestination" placeholder="Enter Destination">
+
                     <div class="date-inputs">
                         <div class="date-input">
                             <label for="startDate">Start Date</label>
@@ -71,15 +90,8 @@
                             <input type="date" id="endDate">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label for="shareCode">Share Code (Optional):</label>
-                        <div class="share-code-input">
-                            <input type="text" id="shareCode" maxlength="6" pattern="[A-Za-z0-9]{6}" title="Please enter exactly 6 characters (letters or numbers)">
-                            <button type="button" onclick="generateRandomShareCode()" class="generate-code-button">Generate Code</button>
-                        </div>
-                        <small class="form-text">Enter a 6-character code or generate one to share your trip with others</small>
-                    </div>
-                    <button type="button" onclick="createTrip()" class="create-button">Create Trip</button>
+                    <button onclick="createTrip()">Create Trip</button>
+                    <button onclick="joinTrip()">Join Trip</button>
                 </div>
                 <div class="trip-list" id="tripList"></div>
             </div>
@@ -91,10 +103,7 @@
             <h1 id="tripDetailsTitle"></h1>
             <p id="tripDetailsDestination"></p>
             <p id="tripDetailsDate"></p>
-            <div class="header-buttons">
-                <button class="back-button" onclick="goBack()">Back to Trips</button>
-                <button class="home-button" onclick="showHome()">Home</button>
-            </div>
+            <button class="back-button" onclick="goBack()">Back to Trips</button>
         </div>
 
         <div class="features-grid">
@@ -168,19 +177,7 @@
         </div>
     </div>
 
-    <!-- Load scripts in correct order -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script>
-        // Add error handling for Firebase script loading
-        window.addEventListener('error', function(e) {
-            if (e.target.tagName === 'SCRIPT' && e.target.src.includes('firebase')) {
-                console.error('Error loading Firebase:', e);
-                alert('Error loading Firebase. Please check your internet connection and try again.');
-            }
-        }, true);
-    </script>
     <script src="script.js"></script>
 </body>
 </html>
